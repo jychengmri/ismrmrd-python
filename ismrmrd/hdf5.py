@@ -134,8 +134,8 @@ def get_arrayhdf5type(val):
     elif val == np.complex128:
         return np.dtype([('real','<f8'),('imag','<f8')])
     else:
-        raise TypeError("Unsupported data type.")    
-    
+        raise TypeError("Unsupported data type.")
+
 def fileinfo(fname):
     fid = h5py.File(fname,'r')
     retval = fid.keys()
@@ -158,7 +158,7 @@ class Dataset(object):
             self.close()
         except:
             pass
-        
+
     @property
     def _dataset(self):
         if self._dataset_name not in self._file:
@@ -167,7 +167,7 @@ class Dataset(object):
 
     def list(self):
         return self._dataset.keys()
-    
+
     def close(self):
         #TODO do we want to flush the file?
         #self._file.flush()
@@ -193,7 +193,7 @@ class Dataset(object):
     def read_acquisition(self, acqnum):
         if 'data' not in self._dataset:
             raise LookupError("Acquisition data not found in the dataset.")
-        
+
         # create an acquisition
         # and fill with the header for this acquisition
         acq = ismrmrd.Acquisition(self._dataset['data'][acqnum]['head'])
@@ -210,7 +210,7 @@ class Dataset(object):
     def append_acquisition(self, acq):
         # create the dataset if needed
         self._file.require_group(self._dataset_name)
-        
+
         # extend by 1
         if 'data' in self._dataset:
             acqnum = self._dataset['data'].shape[0]
@@ -218,7 +218,7 @@ class Dataset(object):
         else:
             self._dataset.create_dataset("data", (1,), maxshape=(None,), dtype=acquisition_dtype)
             acqnum = 0
-        
+
         # create an empty hdf5 acquisition and fill it
         h5acq = np.empty((1,),dtype=acquisition_dtype)
         # copy the header
@@ -226,11 +226,11 @@ class Dataset(object):
         #Python 2.7 has a bug in ctypes buffer size http://bugs.python.org/issue10744
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            h5acq[0]['head'] = acq.getHead();
-        
+            h5acq[0]['head'] = np.frombuffer(acq.getHead(), dtype=acquisition_header_dtype);
+
         # copy the data as float
         h5acq[0]['data'] = acq.data.view(np.float32).reshape((2*acq.active_channels*acq.number_of_samples,))
-        
+
         # copy the trajectory as float
         h5acq[0]['traj'] = acq.traj.view(np.float32).reshape((acq.number_of_samples*acq.trajectory_dimensions,))
 
@@ -241,11 +241,11 @@ class Dataset(object):
         if impath not in self._dataset:
             raise LookupError("Image data not found in the dataset.")
         return self._dataset[impath]['header'].shape[0]
-    
+
     def read_image(self, impath, imnum):
         if impath not in self._dataset:
             raise LookupError("Image data not found in the dataset.")
-        
+
         # create an image
         # and fill with the header and attribute string for this image
         im = ismrmrd.Image(self._dataset[impath]['header'][imnum], self._dataset[impath]['attributes'][imnum])
@@ -259,14 +259,14 @@ class Dataset(object):
         h5py.get_config().complex_names = cplxcfg
 
         return im
-    
+
     def append_image(self, impath, im):
         # create the dataset if needed
         self._file.require_group(self._dataset_name)
 
         # create the image if needed
         self._dataset.require_group(impath)
-        
+
         # extend by 1
         if 'header' in self._dataset[impath]:
             imnum = self._dataset[impath]['header'].shape[0]
@@ -280,16 +280,16 @@ class Dataset(object):
             self._dataset[impath].create_dataset("data", (1,im.data.shape[0],im.data.shape[1],im.data.shape[2],im.data.shape[3]),
                                                 maxshape=(None,im.data.shape[0],im.data.shape[1],im.data.shape[2],im.data.shape[3]), dtype=get_hdf5type(im.data_type))
             imnum = 0
-        
+
         # put the header
         # this should probably be done better
         h5imhead = np.empty((1,),dtype=image_header_dtype)
-        
+
         #Python 2.7 has a bug in ctypes buffer size http://bugs.python.org/issue10744
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             h5imhead[0] = buffer(im.getHead())
-        
+
         self._dataset[impath]['header'][imnum] = h5imhead[0]
         # put the attribute string
         self._dataset[impath]['attributes'][imnum] = im.attribute_string
@@ -300,11 +300,11 @@ class Dataset(object):
         if arrpath not in self._dataset:
             raise LookupError("Array data not found in the dataset.")
         return self._dataset[arrpath].shape[0]
-    
+
     def read_array(self, arrpath, arrnum):
         if arrpath not in self._dataset:
             raise LookupError("Array data not found in the dataset.")
-        
+
         # ismrmrd complex data is stored as pairs named real and imag
         # TODO do we need to store and reset or the config local to the module?
         cplxcfg = h5py.get_config().complex_names;
@@ -313,7 +313,7 @@ class Dataset(object):
         h5py.get_config().complex_names = cplxcfg
 
         return arr
-    
+
     def append_array(self, arrpath, arr):
         # create the dataset if needed
         self._file.require_group(self._dataset_name)
@@ -324,14 +324,14 @@ class Dataset(object):
             self._dataset[arrpath].resize(arrnum+1,axis=0)
         else:
             shape = list(arr.shape)
-            shape.insert(0,1)            
+            shape.insert(0,1)
             shape = tuple(shape)
             maxshape = list(arr.shape)
             maxshape.insert(0,None)
             maxshape = tuple(maxshape)
             self._dataset.create_dataset(arrpath, shape, maxshape=maxshape, dtype=get_arrayhdf5type(arr.dtype))
             arrnum = 0
-        
+
         # put the data
         self._dataset[arrpath][arrnum] = arr.view(dtype=get_arrayhdf5type(arr.dtype))
 
